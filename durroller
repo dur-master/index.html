@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DURELLO DICE THROWER</title>
+    <!-- Carica Tailwind CSS per uno styling rapido e responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Carica il font "Nosifier" da Google Fonts per un tocco gotico/edgy -->
+    <link href="https://fonts.googleapis.com/css2?family=Nosifier&display=swap" rel="stylesheet">
+    <style>
+        /* Stile personalizzato per il font Nosifier */
+        body {
+            font-family: 'Nosifier', cursive; /* Usa il font Nosifier */
+            background-color: #2d0b0b; /* Colore di sfondo rosso scuro */
+        }
+        /* Stile per i dadi */
+        .dice-display {
+            @apply flex items-center justify-center text-7xl font-extrabold bg-red-900 rounded-xl shadow-lg transition-all duration-300 ease-in-out;
+            min-width: 120px; /* Larghezza minima per i dadi */
+            height: 120px; /* Altezza fissa per i dadi */
+            border: 2px solid #8b0000; /* Bordo rosso più scuro */
+            color: #fca5a5; /* Colore testo chiaro per contrasto */
+            /* Assicurati che il testo riempia bene il quadrato */
+            line-height: 1; /* Rimuove lo spazio extra della linea */
+            padding-top: 5px; /* Piccola regolazione verticale per centrare meglio */
+        }
+        /* Animazione per il lancio del dado */
+        .rolling {
+            animation: roll-animation 0.3s infinite alternate;
+        }
+
+        @keyframes roll-animation {
+            from { transform: translateY(0px) rotate(0deg); }
+            to { transform: translateY(-5px) rotate(5deg); }
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-gradient-to-br from-red-900 to-red-950 p-8 rounded-2xl shadow-2xl text-white text-center max-w-lg w-full">
+        <h1 class="text-5xl font-extrabold mb-4 drop-shadow-lg">DURELLO DICE THROWER</h1>
+        <!-- Testo introduttivo rimosso come richiesto -->
+
+        <!-- Visualizzazione dell'ID utente -->
+        <p id="user-id-display" class="text-sm font-light text-red-300 mb-4">
+            ID Utente: Caricamento...
+        </p>
+
+        <div class="flex flex-wrap justify-center gap-6 mb-10">
+            <!-- Dado da 4 facce (d4) -->
+            <div class="flex flex-col items-center">
+                <div id="d4-display" class="dice-display">
+                    <span class="dice-value">?</span>
+                </div>
+                <span class="mt-2 text-sm font-medium text-red-300">D4</span>
+            </div>
+
+            <!-- Dado da 6 facce (d6) -->
+            <div class="flex flex-col items-center">
+                <div id="d6-display" class="dice-display">
+                    <span class="dice-value">?</span>
+                </div>
+                <span class="mt-2 text-sm font-medium text-red-300">D6</span>
+            </div>
+
+            <!-- Dado da 8 facce (d8) -->
+            <div class="flex flex-col items-center">
+                <div id="d8-display" class="dice-display">
+                    <span class="dice-value">?</span>
+                </div>
+                <span class="mt-2 text-sm font-medium text-red-300">D8</span>
+            </div>
+
+            <!-- Dado da 10 facce (d10) -->
+            <div class="flex flex-col items-center">
+                <div id="d10-display" class="dice-display">
+                    <span class="dice-value">?</span>
+                </div>
+                <span class="mt-2 text-sm font-medium text-red-300">D10</span>
+            </div>
+
+            <!-- Dado da 12 facce (d12) -->
+            <div class="flex flex-col items-center">
+                <div id="d12-display" class="dice-display">
+                    <span class="dice-value">?</span>
+                </div>
+                <span class="mt-2 text-sm font-medium text-red-300">D12</span>
+            </div>
+
+            <!-- Dado da 20 facce (d20) -->
+            <div class="flex flex-col items-center">
+                <div id="d20-display" class="dice-display">
+                    <span class="dice-value">?</span>
+                </div>
+                <span class="mt-2 text-sm font-medium text-red-300">D20</span>
+            </div>
+        </div>
+
+        <!-- Pulsante per lanciare i dadi -->
+        <button id="roll-button"
+                class="bg-green-500 hover:bg-green-600 text-white font-extrabold py-4 px-8 rounded-full shadow-xl transition-all duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-green-400 focus:ring-opacity-75">
+            Roll!
+        </button>
+
+        <!-- Area per i messaggi -->
+        <p id="message-area" class="mt-8 text-lg font-semibold text-red-300 opacity-90"></p>
+    </div>
+
+    <script type="module">
+        // Importa le funzioni Firebase necessarie
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variabili globali fornite dall'ambiente Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Inizializza Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        let currentUserId = null; // Variabile per memorizzare l'ID utente corrente
+        let isAuthReady = false; // Flag per indicare se l'autenticazione è pronta
+
+        // Ottiene i riferimenti agli elementi HTML
+        const d4Display = document.getElementById('d4-display');
+        const d6Display = document.getElementById('d6-display');
+        const d8Display = document.getElementById('d8-display');
+        const d10Display = document.getElementById('d10-display');
+        const d12Display = document.getElementById('d12-display');
+        const d20Display = document.getElementById('d20-display');
+        const rollButton = document.getElementById('roll-button');
+        const messageArea = document.getElementById('message-area');
+        const userIdDisplay = document.getElementById('user-id-display');
+
+        /**
+         * Funzione per generare un numero casuale tra 1 e max (incluso).
+         * @param {number} max - Il numero massimo che il dado può generare.
+         * @returns {number} - Il risultato del lancio del dado.
+         */
+        function getRandomInt(max) {
+            return Math.floor(Math.random() * max) + 1;
+        }
+
+        /**
+         * Funzione per animare il lancio di un singolo dado.
+         * Restituisce una Promise che si risolve quando l'animazione è completa.
+         * @param {HTMLElement} displayElement - L'elemento HTML che mostra il risultato del dado.
+         * @param {number} finalValue - Il valore finale del lancio del dado.
+         * @param {number} maxFaces - Il numero massimo di facce del dado (per l'animazione).
+         * @returns {Promise<void>} - Una Promise che si risolve quando l'animazione è completa.
+         */
+        function animateDiceRoll(displayElement, finalValue, maxFaces) {
+            return new Promise(resolve => {
+                const diceValueSpan = displayElement.querySelector('.dice-value');
+                let animationCounter = 0;
+                const animationDuration = 500; // Durata dell'animazione in ms
+                const intervalTime = 50; // Intervallo tra i cambi di numero in ms
+
+                displayElement.classList.add('rolling');
+
+                const animationInterval = setInterval(() => {
+                    // Genera un numero casuale temporaneo per l'animazione
+                    diceValueSpan.textContent = getRandomInt(maxFaces);
+                    animationCounter += intervalTime;
+
+                    if (animationCounter >= animationDuration) {
+                        clearInterval(animationInterval);
+                        diceValueSpan.textContent = finalValue; // Imposta il valore finale
+                        displayElement.classList.remove('rolling'); // Rimuove la classe di animazione
+                        resolve(); // Risolve la Promise quando l'animazione è finita
+                    }
+                }, intervalTime);
+            });
+        }
+
+        /**
+         * Aggiorna la UI con i risultati dei dadi.
+         * @param {object} data - Oggetto contenente i risultati dei dadi.
+         */
+        async function updateDiceUI(data) { // Resa asincrona per usare await
+            if (data) {
+                rollButton.disabled = true; // Disabilita il pulsante all'inizio dell'aggiornamento UI
+                messageArea.textContent = 'Lancio in corso...'; // Feedback immediato
+
+                // Avvia le animazioni per ciascun dado e attendi che tutte finiscano
+                await Promise.all([
+                    animateDiceRoll(d4Display, data.d4, 4),
+                    animateDiceRoll(d6Display, data.d6, 6),
+                    animateDiceRoll(d8Display, data.d8, 8),
+                    animateDiceRoll(d10Display, data.d10, 10),
+                    animateDiceRoll(d12Display, data.d12, 12),
+                    animateDiceRoll(d20Display, data.d20, 20)
+                ]);
+
+                let rolledByMessage = '';
+                if (data.rolledBy) {
+                    rolledByMessage = ` (Lanciato da: ${data.rolledBy.substring(0, 8)}...)`; // Mostra una parte dell'ID
+                }
+                messageArea.textContent = `Risultati: D4: ${data.d4}, D6: ${data.d6}, D8: ${data.d8}, D10: ${data.d10}, D12: ${data.d12}, D20: ${data.d20}${rolledByMessage}`;
+                rollButton.disabled = false; // Riabilita il pulsante dopo che tutte le animazioni sono terminate
+            } else {
+                // Inizializza tutti i dadi a '?'
+                d4Display.querySelector('.dice-value').textContent = '?';
+                d6Display.querySelector('.dice-value').textContent = '?';
+                d8Display.querySelector('.dice-value').textContent = '?';
+                d10Display.querySelector('.dice-value').textContent = '?';
+                d12Display.querySelector('.dice-value').textContent = '?';
+                d20Display.querySelector('.dice-value').textContent = '?';
+                messageArea.textContent = 'Premi "Roll!" per iniziare.';
+                rollButton.disabled = false; // Assicurati che il pulsante sia abilitato se non ci sono dati
+            }
+        }
+
+        /**
+         * Funzione principale per lanciare tutti i dadi e salvare su Firestore.
+         */
+        async function rollAndSaveDice() {
+            if (!isAuthReady) {
+                messageArea.textContent = 'Autenticazione in corso, riprova tra poco.';
+                return;
+            }
+
+            try {
+                const d4Result = getRandomInt(4);
+                const d6Result = getRandomInt(6);
+                const d8Result = getRandomInt(8);
+                const d10Result = getRandomInt(10);
+                const d12Result = getRandomInt(12);
+                const d20Result = getRandomInt(20);
+
+                // Percorso del documento pubblico per i lanci dei dadi
+                const diceRollsRef = doc(db, `artifacts/${appId}/public/data/diceRolls/currentRoll`);
+
+                await setDoc(diceRollsRef, {
+                    d4: d4Result,
+                    d6: d6Result,
+                    d8: d8Result,
+                    d10: d10Result,
+                    d12: d12Result,
+                    d20: d20Result,
+                    timestamp: Date.now(),
+                    rolledBy: currentUserId // Salva chi ha lanciato i dadi
+                });
+
+                // L'onSnapshot aggiornerà la UI per tutti, inclusa questa istanza
+                // Non è necessario chiamare updateDiceUI direttamente qui dopo setDoc
+            } catch (error) {
+                console.error("Errore nel lancio e salvataggio dei dadi:", error);
+                messageArea.textContent = 'Errore nel lancio dei dadi. Controlla la console.';
+                rollButton.disabled = false; // Riabilita il pulsante in caso di errore
+            }
+        }
+
+        // Listener per i cambiamenti dello stato di autenticazione
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUserId = user.uid;
+                userIdDisplay.textContent = `ID Utente: ${currentUserId}`;
+                isAuthReady = true;
+                messageArea.textContent = 'Premi "Roll!" per iniziare.';
+
+                // Ascolta i cambiamenti nel documento dei lanci dei dadi
+                const diceRollsRef = doc(db, `artifacts/${appId}/public/data/diceRolls/currentRoll`);
+                onSnapshot(diceRollsRef, (docSnap) => {
+                    if (docSnap.exists()) {
+                        updateDiceUI(docSnap.data());
+                    } else {
+                        // Se il documento non esiste ancora, inizializza i dadi
+                        updateDiceUI(null);
+                    }
+                }, (error) => {
+                    console.error("Errore nell'ascolto dei lanci dei dadi:", error);
+                    messageArea.textContent = 'Errore di sincronizzazione. Ricarica la pagina.';
+                });
+
+            } else {
+                // Se non autenticato, prova ad autenticarti in modo anonimo
+                try {
+                    if (initialAuthToken) {
+                        await signInWithCustomToken(auth, initialAuthToken);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Errore nell'autenticazione:", error);
+                    messageArea.textContent = 'Errore nell\'autenticazione. Ricarica la pagina.';
+                }
+            }
+        });
+
+        // Aggiunge il listener di eventi al pulsante
+        rollButton.addEventListener('click', rollAndSaveDice);
+
+        // Inizializza i display dei dadi all'avvio
+        window.onload = () => {
+            updateDiceUI(null); // Imposta i dadi su '?'
+            messageArea.textContent = 'Connessione al servizio dadi...';
+            rollButton.disabled = true; // Disabilita il pulsante finché non è pronto
+        };
+    </script>
+</body>
+</html>
